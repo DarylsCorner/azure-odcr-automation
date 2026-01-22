@@ -1,0 +1,49 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# SSH keys (never commit these)
+*.pem
+*.key
+sshkey
+id_rsa
+id_rsa.pub
+
+# Azure credentials
+.azure/
+azure.json
+
+# Ansible
+*.retry
+.ansible/
+
+# Environment files
+.env
+.env.local
+*.env
+
+# Test outputs
+test-results/
+coverage/
