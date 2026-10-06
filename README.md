@@ -254,10 +254,7 @@ cd ~/Azure_SAP_Automated_Deployment/WORKSPACES/SYSTEM/<SID-RG>/
 export ANSIBLE_INVENTORY=<SID>_hosts.yaml
 
 ansible-playbook ~/Azure_SAP_Automated_Deployment/sap-automation/deploy/ansible/playbook_11_00_00_capacity_reservations.yaml \
-  --inventory-file=<SID>_hosts.yaml \
-  --private-key=sshkey \
   --extra-vars="_workspace_directory=$(pwd)" \
-  --extra-vars="@sap-parameters.yaml" \
   --extra-vars="odcr_action=plan"
 ```
 
@@ -271,15 +268,19 @@ cd ~/Azure_SAP_Automated_Deployment/WORKSPACES/SYSTEM/PRD-SCUS-TFO01-PGY/
 export ANSIBLE_INVENTORY=PGY_hosts.yaml
 
 ansible-playbook ~/Azure_SAP_Automated_Deployment/sap-automation/deploy/ansible/playbook_11_00_00_capacity_reservations.yaml \
-  --inventory-file=PGY_hosts.yaml \
-  --private-key=sshkey \
   --extra-vars="_workspace_directory=$(pwd)" \
-  --extra-vars="@sap-parameters.yaml" \
   --extra-vars="odcr_action=plan"
 ```
 
-`ANSIBLE_INVENTORY` and `_workspace_directory` are normally set by the SDAF menu and are required when running
-manually. The playbook only runs Azure CLI commands from the deployer; it doesn't connect to the SAP VMs.
+Both settings are required when running manually (the SDAF menu sets them for you):
+
+| Setting | Why |
+|---|---|
+| `ANSIBLE_INVENTORY=<SID>_hosts.yaml` | The playbook reads the SID's resource group and subscription from this file |
+| `_workspace_directory=$(pwd)` | Where the inventory is, and where the completion marker (`.progress/odcr-management-done`) is written |
+
+The playbook only runs Azure CLI commands from the deployer. It doesn't connect to the SAP VMs, so no SSH key,
+`--inventory-file` or `sap-parameters.yaml` is needed.
 
 ### Option C - Run the script directly
 
