@@ -50,8 +50,20 @@ Key features:
 
 ### Inputs
 
-The tool works on one SID at a time. It reads the SID's resource group and subscription from the SDAF inventory
-(`<SID>_hosts.yaml`) and looks up the Azure region.
+The tool targets one SID resource group per run. The playbook reads only `resource_group_name` and
+`subscription_id` from the SDAF inventory (`<SID>_hosts.yaml`) in the SID workspace.
+
+The script queries Azure directly with `az vm list` in that resource group and subscription, retrieving each
+VM's ID, name, location, size, availability zone and current CRG association. The inventory's host list is **not**
+used to select VMs: servers added outside SDAF are included automatically if they follow the role naming
+convention below. `sap-parameters.yaml` is not read by this playbook.
+
+The Azure region comes from the VMs, **not** the resource group's metadata location. All VMs in the selected
+resource group must report the same region, including VMs whose roles are skipped. Empty groups, missing or
+invalid VM data, failed discovery calls, and mixed VM regions stop the run with an error. Existing target CRGs
+are checked for a matching region before any CRG creation, sharing, reservation or VM-association changes.
+The region code in the resource-group name (for example `SCUS`) remains a naming convention, not an Azure
+location lookup.
 
 The SID resource group must follow the SDAF naming convention `<ENV>-<REGION>-<VNET>-<SID>`, for example
 `PRD-SCUS-TFO01-PGY`. The environment code decides which central pool is used:
@@ -288,11 +300,13 @@ The script can run without Ansible, for any SID resource group:
 
 ```bash
 ~/Azure_SAP_Automated_Deployment/sap-automation/deploy/scripts/odcr_management.sh \
-  plan PRD-SCUS-TFO01-PGY <subscription-id> southcentralus
+  plan PRD-SCUS-TFO01-PGY <subscription-id>
 ```
 
-Arguments: `<plan|create|info> <SID resource group> <subscription ID> <Azure region>`. Optional settings are passed
-as environment variables (see below). Exit code `0` = success, `1` = stopped or failed.
+Arguments: `<plan|create|info> <SID resource group> <subscription ID> [expected Azure region]`.
+The fourth argument is optional for compatibility with older commands. If supplied, it must match the
+VM-discovered region (case-insensitive); it cannot override that region. Optional settings are passed as
+environment variables (see below). Exit code `0` = success, `1` = stopped or failed.
 
 ---
 
@@ -325,7 +339,7 @@ Script equivalent:
 ```bash
 ODCR_SHARE_SUBSCRIPTIONS="<prod-subscription-id>,<nonprod-subscription-id>" \
   ~/Azure_SAP_Automated_Deployment/sap-automation/deploy/scripts/odcr_management.sh \
-  create PRD-SCUS-TFO01-PGY <prod-subscription-id> southcentralus
+  create PRD-SCUS-TFO01-PGY <prod-subscription-id>
 ```
 
 ---
@@ -502,8 +516,12 @@ identity needs rights to update those VMs.
 
 | Symptom | Cause / fix |
 |---|---|
-| `STOPPED ... central App server resource group '<name>' does not exist` | Create the central resource group (`<ENV>-<REGION>-CR`), or point to another one with `odcr_central_resource_group`. Nothing was changed. |
-| `STOPPED ... environment code '<X>' does not map to a tier` | The SID resource group doesn't start with `PRD` or `NRD`. Set `odcr_tier=prod` or `odcr_tier=nonprod`. |
+| `central App server resource group '<name>' does not exist` | Create the central resource group (`<ENV>-<REGION>-CR`), or point to another one with `odcr_central_resource_group`. Nothing was changed. |
+| `environment code '<X>' does not map to a tier` | The SID resource group doesn't start with `PRD` or `NRD`. Set `odcr_tier=prod` or `odcr_tier=nonprod`. |
+| `no VMs found` / `missing or invalid VM location` | Check the inventory scope and the Azure VM data. A region cannot be safely inferred from an empty or invalid VM list. |
+| `multiple VM locations` | All VMs in the targeted resource group must be in one region. The tool does not partition a resource group across regions. |
+| `location ... does not match VM location` | Correct a stale optional script location argument, or select a target CRG in the VM region. No Azure changes were made by this run. |
+| `unable to list capacity reservation groups` / `unable to check central resource group` | Check Azure access and connectivity. A failed lookup stops the run; it is not treated as a missing CRG. |
 | `Not supported - SKU has no ODCR support` | The VM size can't be reserved in this region. Those VMs are not protected. |
 | `regional VM - association requires deallocation` | The VM isn't zonal. Associating it needs a deallocation in a maintenance window - not done by the tool. |
 | `role not recognised from VM name` | The VM name doesn't follow the SDAF `<sid>app/scs/d/web` pattern. |
@@ -524,7 +542,9 @@ identity needs rights to update those VMs.
 - **CRG zones are fixed at creation**: new CRGs are created with zones `1 2 3` by default so failover zones are
   covered.
 - **Menu integration** must be re-applied after SDAF upgrades.
-- **One SID per run**: the central pool is shared, so run the tool for each SID after it's deployed or changed.
+- **One SID resource group, one VM region per run**: the central pool is shared, so run the tool for each SID
+  after it's deployed or changed. Out-of-band VM additions are discovered on the next run; this is not a
+  continuous reconciliation service.
 
 ---
 
@@ -536,6 +556,16 @@ identity needs rights to update those VMs.
 | `odcr_management.sh` | `sap-automation/deploy/scripts/` | Logic: CRGs, reservations, VM association, sharing |
 
 ---
+
+## Regression tests
+
+On Linux (including WSL), with Bash 4+, `jq`, Python 3 and Ansible installed:
+
+```bash
+python3 -B -m unittest discover -s tests -v
+```
+
+The tests run the script and playbook against a mock Azure CLI. They do not access Azure or change cloud resources.
 
 ## References
 
